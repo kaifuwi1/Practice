@@ -1,0 +1,134 @@
+using System; 
+using System.Linq;
+using TabularEditor;
+
+// Get the selected measure
+var selectedMeasure = Selected.Measures.FirstOrDefault();
+if (selectedMeasure == null)
+{
+    Error("Please select a measure.");
+    return;
+}
+
+string measureName = selectedMeasure.Name;
+var table = selectedMeasure.Table;
+
+// Here we define each measure on a single line to avoid new-line-in-constant errors.
+var measures = new Tuple<string, string>[]
+{
+    // MTD
+    new Tuple<string, string>(
+        measureName + " MTD",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearMonthNumber] = MAX('3 Date'[Calendar YearMonthNumber_S]) && '3 Date'[Sales Date] <= MAX('3 Date'[Sales Date])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD PM",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearMonthNumber] = (MAX('3 Date'[Calendar YearMonthNumber_S]) - 1) && '3 Date'[Sales Date] <= MAX('3 Date'[Calendar DatePreviousMonth_S])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD PY",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearMonthNumber] = MAX('3 Date'[Calendar YearMonthNumber_S]) - 12 && '3 Date'[Sales Date] <= MAX('3 Date'[Calendar DatePreviousYear_S])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD MOM",
+        "[" + measureName + " MTD] - [" + measureName + " MTD PM]"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD MOM %",
+        "DIVIDE([" + measureName + " MTD MOM], [" + measureName + " MTD PM])"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD YOY",
+        "[" + measureName + " MTD] - [" + measureName + " MTD PY]"
+    ),
+    new Tuple<string, string>(
+        measureName + " MTD YOY %",
+        "DIVIDE([" + measureName + " MTD YOY], [" + measureName + " MTD PY])"
+    ),
+
+    // QTD
+    new Tuple<string, string>(
+        measureName + " QTD",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearQuarterNumber] = MAX('3 Date'[Calendar YearQuarterNumber_S]) && '3 Date'[Sales Date] <= MAX('3 Date'[Sales Date])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD PQ",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearQuarterNumber] = (MAX('3 Date'[Calendar YearQuarterNumber_S]) - 1) && '3 Date'[Dates] <= MAX('3 Date'[Calendar DatePreviousQuarter])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD PY",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearQuarterNumber] = (MAX('3 Date'[Calendar YearQuarterNumber_S]) - 4) && '3 Date'[Sales Date] <= MAX('3 Date'[Calendar DatePreviousYear_S])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD QOQ",
+        "[" + measureName + " QTD] - [" + measureName + " QTD PQ]"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD QOQ %",
+        "DIVIDE([" + measureName + " QTD QOQ], [" + measureName + " QTD PQ])"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD YOY",
+        "[" + measureName + " QTD] - [" + measureName + " QTD PY]"
+    ),
+    new Tuple<string, string>(
+        measureName + " QTD YOY %",
+        "DIVIDE([" + measureName + " QTD YOY], [" + measureName + " QTD PY])"
+    ),
+
+    // YTD
+    new Tuple<string, string>(
+        measureName + " YTD",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearNumber] = MAX('3 Date'[Calendar YearNumber_S]) && '3 Date'[Sales Date] <= MAX('3 Date'[Sales Date])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " YTD PY",
+        "CALCULATE([" + measureName + "], FILTER(ALL('3 Date'),'3 Date'[Calendar YearNumber] = MAX('3 Date'[Calendar YearNumber_S]) - 1 && '3 Date'[Sales Date] <= MAX('3 Date'[Calendar DatePreviousYear_S])))"
+    ),
+    new Tuple<string, string>(
+        measureName + " YTD YOY",
+        "[" + measureName + " YTD] - [" + measureName + " YTD PY]"
+    ),
+    new Tuple<string, string>(
+        measureName + " YTD YOY %",
+        "DIVIDE([" + measureName + " YTD YOY], [" + measureName + " YTD PY])"
+    ),
+
+    // Switch x1
+    new Tuple<string, string>(
+        measureName + " Switch x1",
+        "VAR PeriodSelection = SELECTEDVALUE('Time Selection'[PeriodSelector]) RETURN SWITCH(PeriodSelection, \"Выбор периода\", [" + measureName + "], \"YTD\", [" + measureName + " YTD], \"MTD\", [" + measureName + " MTD], \"QTD\", [" + measureName + " QTD], \"\")"
+    ),
+    // Switch x2
+    new Tuple<string, string>(
+        measureName + " Switch x2",
+        "VAR PeriodSelection = SELECTEDVALUE('Time Selection'[PeriodSelector]) RETURN SWITCH(PeriodSelection, \"Выбор периода\", \"\", \"YTD\", [" + measureName + " YTD PY], \"MTD\", [" + measureName + " MTD PM], \"QTD\", [" + measureName + " QTD PQ], \"\")"
+    ),
+    // Switch x3
+    new Tuple<string, string>(
+        measureName + " Switch x3",
+        "VAR PeriodSelection = SELECTEDVALUE('Time Selection'[PeriodSelector]) RETURN SWITCH(PeriodSelection, \"Выбор периода\", \"\", \"YTD\", [" + measureName + " YTD YOY], \"MTD\", [" + measureName + " MTD MOM], \"QTD\", [" + measureName + " QTD QOQ], \"\")"
+    ),
+    // Switch x4
+    new Tuple<string, string>(
+        measureName + " Switch x4",
+        "VAR PeriodSelection = SELECTEDVALUE('Time Selection'[PeriodSelector]) RETURN SWITCH(PeriodSelection, \"Выбор периода\", \"\", \"YTD\", [" + measureName + " YTD YOY %], \"MTD\", [" + measureName + " MTD MOM %], \"QTD\", [" + measureName + " QTD QOQ %], \"\")"
+    )
+};
+
+// Create or update measures
+foreach (var measureDef in measures)
+{
+    var measure = table.Measures.FirstOrDefault(m => m.Name == measureDef.Item1);
+    if (measure == null)
+    {
+        measure = table.AddMeasure(measureDef.Item1, measureDef.Item2);
+        measure.FormatString = "#,0";
+    }
+    else
+    {
+        measure.Expression = measureDef.Item2;
+    }
+}
+
+Info("All measures and switch measures have been created or updated successfully.");
